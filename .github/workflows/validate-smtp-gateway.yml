@@ -31,3 +31,6 @@ jobs:
         run: node --check scripts/build.mjs
       - name: Check gateway Python syntax
         run: python -m py_compile gateway/python/*.py
+
+      - name: Test employee filter behavior
+        run: python gateway/python/test_submission_filter.py

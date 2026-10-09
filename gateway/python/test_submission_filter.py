@@ -56,6 +56,12 @@ class SenderValidation(unittest.TestCase):
         self.assertTrue(changed)
         self.assertLess(updated.index('Signature'), updated.index('Forwarded message'))
 
+    def test_ukrainian_reply_signature_before_quote(self):
+        body = 'Нова відповідь\nсб, 10 жовт. 2026 р. Dmytro Hyk пише:\n' + module.EN_DISCLAIMER_MARKER
+        updated, changed = module.insert_plain_signature(body, 'Signature')
+        self.assertTrue(changed)
+        self.assertLess(updated.index('Signature'), updated.index('Dmytro Hyk пише:'))
+
     def test_existing_current_signature_is_not_duplicated(self):
         body = '<p>Text</p>' + module.HTML_MARKER + '<b>Signature</b>'
         self.assertEqual((body, False), module.insert_html_signature(body, '<b>Signature</b>'))

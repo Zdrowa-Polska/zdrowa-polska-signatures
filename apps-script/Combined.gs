@@ -10,11 +10,12 @@ const ZP_CONFIG = Object.freeze({
   LINKEDIN_FIELD: 'LinkedIn',
   ENABLED_FIELD: 'EmailSignature',
 
+  GITHUB_OWNER: 'Zdrowa-Polska',
   GITHUB_REPO: 'zdrowa-polska-signatures',
   GITHUB_BRANCH: 'main',
   PHOTOS_PATH: 'data/photos',
   VCARDS_PATH: 'data/vcards',
-  ASSET_BASE_URL: 'https://zdrowapolska.github.io/zdrowa-polska-signatures',
+  ASSET_BASE_URL: 'https://zdrowa-polska.github.io/zdrowa-polska-signatures',
 
   TEST_LINKEDIN: 'https://www.linkedin.com/in/dhyk/',
   FACEBOOK_URL: '',
@@ -199,9 +200,8 @@ function getUserPhoto_(email) {
 
 function githubSettings_() {
   const props = PropertiesService.getScriptProperties();
-  const owner = props.getProperty('GITHUB_OWNER');
+  const owner = ZP_CONFIG.GITHUB_OWNER;
   const token = props.getProperty('GITHUB_TOKEN');
-  if (!owner) throw new Error('Script Property GITHUB_OWNER is not set.');
   if (!token) throw new Error('Script Property GITHUB_TOKEN is not set.');
   return { owner: owner, token: token, repo: ZP_CONFIG.GITHUB_REPO, branch: ZP_CONFIG.GITHUB_BRANCH };
 }

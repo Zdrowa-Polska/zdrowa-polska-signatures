@@ -36,7 +36,7 @@ PLAIN_QUOTE_PATTERNS = (
     re.compile(r"(?im)^-{2,}\s*Forwarded message\s*-{2,}\s*$"),
     re.compile(r"(?im)^-{2,}\s*Wiadomość przekazana\s*-{2,}\s*$"),
     re.compile(r"(?im)^-----Original Message-----\s*$"),
-    re.compile(r"(?im)^.+\b(?:wrote|napisał|napisała|napisał\(a\)):\s*$"),
+    re.compile(r"(?im)^.+\b(?:wrote|napisał|napisała|napisał\(a\)|пише|писав|написав|написала|написал):\s*$"),
 )
 
 

@@ -196,22 +196,15 @@ class SubmissionSignatureServer(smtpd.SMTPServer):
         envelope_from = str(mailfrom or "").strip().lower()
         signatures = load_signatures()
 
-        if msg.get(HEADER_MARKER, "").lower() == "yes":
-            reinject(mailfrom, rcpttos, msg.as_bytes(policy=policy.SMTP))
-            return None
+        if len(msg.get_all("From", [])) != 1 or not header_from.endswith("@" + CORPORATE_DOMAIN):
+            return "550 5.7.1 A single corporate From address is required"
 
-        if not header_from.endswith("@" + CORPORATE_DOMAIN):
-            raise RuntimeError("submission filter rejected non-corporate From: " + header_from)
-
-        if envelope_from and envelope_from != header_from:
-            raise RuntimeError(
-                "submission filter rejected envelope/header mismatch: "
-                + envelope_from + " != " + header_from
-            )
+        if not envelope_from or envelope_from != header_from:
+            return "550 5.7.1 Envelope sender must match the corporate From address"
 
         signature = signatures.get(header_from)
         if not signature:
-            raise RuntimeError("no employee gateway signature configured for " + header_from)
+            return "550 5.7.1 No employee signature is configured for this sender"
 
         apply_signature(msg, signature)
         reinject(mailfrom, rcpttos, msg.as_bytes(policy=policy.SMTP))

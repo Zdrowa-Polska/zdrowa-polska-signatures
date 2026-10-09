@@ -9,6 +9,7 @@ const ZP_CONFIG = Object.freeze({
   CUSTOM_SCHEMA: 'SignatureProfile',
   LINKEDIN_FIELD: 'LinkedIn',
   ENABLED_FIELD: 'EmailSignature',
+  EXTERNAL_MAILBOXES_FIELD: 'ExternalMailboxes',
 
   GITHUB_OWNER: 'Zdrowa-Polska',
   GITHUB_REPO: 'zdrowa-polska-signatures',
@@ -38,7 +39,7 @@ const ZP_CONFIG = Object.freeze({
   EXTRA_DESIRED_HASH_PREFIX: 'EXTRA_SIG_DESIRED_HASH_',
   EXTRA_ACTUAL_HASH_PREFIX: 'EXTRA_SIG_ACTUAL_HASH_',
 
-  EXTRA_SEND_AS: Object.freeze([
+  LEGACY_EXTRA_SEND_AS: Object.freeze([
     Object.freeze({
       mailboxEmail: 'dg@vitagramma.com',
       sendAsEmail: 'dhyk@zdrowapolskagroup.pl',
@@ -72,6 +73,31 @@ function propertyKeyForSendAs_(prefix, mailboxEmail, sendAsEmail) {
   return prefix + value.replace(/[^a-z0-9]/g, '_');
 }
 
+function normalizeExternalMailboxes_(raw) {
+  if (!raw) return [];
+
+  const values = Array.isArray(raw)
+    ? raw.map(function(item) {
+        if (item && typeof item === 'object' && item.value != null) return item.value;
+        return item;
+      })
+    : [raw];
+
+  const seen = {};
+  return values
+    .reduce(function(out, value) {
+      String(value == null ? '' : value)
+        .split(/[\n,;]+/)
+        .forEach(function(part) {
+          const email = String(part || '').trim().toLowerCase();
+          if (!email || email.indexOf('@') <= 0 || seen[email]) return;
+          seen[email] = true;
+          out.push(email);
+        });
+      return out;
+    }, []);
+}
+
 function signatureMode_() {
   const value = String(
     PropertiesService.getScriptProperties().getProperty(ZP_CONFIG.MODE_PROPERTY) || ZP_CONFIG.MODE_TEST
@@ -103,6 +129,7 @@ function workspaceUserFromRaw_(user) {
 
   const custom = (user.customSchemas || {})[ZP_CONFIG.CUSTOM_SCHEMA] || {};
   const linkedin = custom[ZP_CONFIG.LINKEDIN_FIELD] || '';
+  const externalMailboxes = normalizeExternalMailboxes_(custom[ZP_CONFIG.EXTERNAL_MAILBOXES_FIELD]);
   const enabledValue = custom[ZP_CONFIG.ENABLED_FIELD];
   const enabled = enabledValue === true || String(enabledValue).toLowerCase() === 'true';
 
@@ -114,6 +141,7 @@ function workspaceUserFromRaw_(user) {
     jobTitle: org.title || '',
     phone: phoneObj.value || '',
     linkedin: linkedin,
+    externalMailboxes: externalMailboxes,
     enabled: enabled,
     suspended: !!user.suspended,
     archived: !!user.archived
@@ -145,6 +173,65 @@ function listAllActiveUsers_() {
   } while (pageToken);
 
   return out;
+}
+
+function listAllWorkspaceUsers_() {
+  const out = [];
+  let pageToken;
+
+  do {
+    const response = AdminDirectory.Users.list({
+      domain: ZP_CONFIG.DOMAIN,
+      projection: 'full',
+      maxResults: 200,
+      pageToken: pageToken
+    });
+
+    (response.users || []).forEach(function(raw) {
+      out.push(workspaceUserFromRaw_(raw));
+    });
+
+    pageToken = response.nextPageToken;
+  } while (pageToken);
+
+  return out;
+}
+
+function extraSendAsMappings_() {
+  const mappings = [];
+  const seen = {};
+
+  listAllWorkspaceUsers_().forEach(function(user) {
+    (user.externalMailboxes || []).forEach(function(mailboxEmail) {
+      const mapping = {
+        mailboxEmail: String(mailboxEmail).toLowerCase(),
+        sendAsEmail: String(user.email).toLowerCase(),
+        sourceUserEmail: String(user.email).toLowerCase(),
+        source: 'directory'
+      };
+      const key = mapping.mailboxEmail + '|' + mapping.sendAsEmail;
+      if (seen[key]) return;
+      seen[key] = true;
+      mappings.push(mapping);
+    });
+  });
+
+  // Transitional fallback only. After migrateLegacyExtraSendAsToDirectory()
+  // is verified in production, remove LEGACY_EXTRA_SEND_AS entirely.
+  (ZP_CONFIG.LEGACY_EXTRA_SEND_AS || []).forEach(function(mapping) {
+    const normalized = {
+      mailboxEmail: String(mapping.mailboxEmail).toLowerCase(),
+      sendAsEmail: String(mapping.sendAsEmail).toLowerCase(),
+      sourceUserEmail: String(mapping.sourceUserEmail).toLowerCase(),
+      source: 'legacy-fallback'
+    };
+    const key = normalized.mailboxEmail + '|' + normalized.sendAsEmail;
+    if (seen[key]) return;
+    seen[key] = true;
+    mappings.push(normalized);
+  });
+
+  return mappings;
 }
 
 function usersForCurrentMode_() {
@@ -831,7 +918,7 @@ function syncExtraSendAsSignatures_() {
   const stats = { updated: 0, unchanged: 0, cleared: 0, ignored: 0, failed: 0 };
   const failures = [];
 
-  ZP_CONFIG.EXTRA_SEND_AS.forEach(function(mapping) {
+  extraSendAsMappings_().forEach(function(mapping) {
     try {
       const result = syncExtraSendAsMapping_(mapping);
       if (result && stats.hasOwnProperty(result.action)) {
@@ -863,7 +950,7 @@ function syncExtraSendAsSignatures_() {
 }
 
 function testExtraSendAsAccess() {
-  ZP_CONFIG.EXTRA_SEND_AS.forEach(function(mapping) {
+  extraSendAsMappings_().forEach(function(mapping) {
     const current = getGmailSendAs_(
       mapping.mailboxEmail,
       mapping.sendAsEmail,
@@ -1102,7 +1189,7 @@ function systemStatus() {
     enabledUsers: enabled,
     disabledUsers: users.length - enabled,
     extraSendAsEnabled: extraSendAsEnabled_(),
-    extraSendAsMappings: ZP_CONFIG.EXTRA_SEND_AS.length,
+    extraSendAsMappings: extraSendAsMappings_().length,
     businessCardsBaseUrl: ZP_CONFIG.ASSET_BASE_URL + '/contacts/',
     businessCardQrBaseUrl: ZP_CONFIG.ASSET_BASE_URL + '/qr/'
   };
@@ -1110,37 +1197,125 @@ function systemStatus() {
   return status;
 }
 
+function signatureSchemaFields_() {
+  return [
+    {
+      fieldName: ZP_CONFIG.LINKEDIN_FIELD,
+      fieldType: 'STRING',
+      multiValued: false,
+      readAccessType: 'ADMINS_AND_SELF'
+    },
+    {
+      fieldName: ZP_CONFIG.ENABLED_FIELD,
+      fieldType: 'BOOL',
+      multiValued: false,
+      readAccessType: 'ADMINS_AND_SELF'
+    },
+    {
+      fieldName: ZP_CONFIG.EXTERNAL_MAILBOXES_FIELD,
+      displayName: 'External Gmail / Workspace mailboxes',
+      fieldType: 'STRING',
+      multiValued: true,
+      readAccessType: 'ADMINS_AND_SELF'
+    }
+  ];
+}
+
 function setupSignatureSchema() {
   const name = ZP_CONFIG.CUSTOM_SCHEMA;
-  let exists = false;
+  let schema = null;
 
   try {
-    AdminDirectory.Schemas.get('my_customer', name);
-    exists = true;
+    schema = AdminDirectory.Schemas.get('my_customer', name);
   } catch (e) {
-    exists = false;
+    schema = null;
   }
 
-  if (!exists) {
+  if (!schema) {
     AdminDirectory.Schemas.insert({
       schemaName: name,
       displayName: 'Email Signature',
-      fields: [
-        {
-          fieldName: ZP_CONFIG.LINKEDIN_FIELD,
-          fieldType: 'STRING',
-          multiValued: false,
-          readAccessType: 'ADMINS_AND_SELF'
-        },
-        {
-          fieldName: ZP_CONFIG.ENABLED_FIELD,
-          fieldType: 'BOOL',
-          multiValued: false,
-          readAccessType: 'ADMINS_AND_SELF'
-        }
-      ]
+      fields: signatureSchemaFields_()
     }, 'my_customer');
+
+    console.log('SignatureProfile schema created with ExternalMailboxes.');
+    return;
   }
+
+  const existing = {};
+  (schema.fields || []).forEach(function(field) {
+    existing[field.fieldName] = true;
+  });
+
+  const missing = signatureSchemaFields_().filter(function(field) {
+    return !existing[field.fieldName];
+  });
+
+  if (!missing.length) {
+    console.log('SignatureProfile schema already contains ExternalMailboxes.');
+    return;
+  }
+
+  AdminDirectory.Schemas.patch({
+    fields: (schema.fields || []).concat(missing)
+  }, 'my_customer', name);
+
+  console.log(
+    'SignatureProfile schema upgraded. Added fields: ' +
+    missing.map(function(field) { return field.fieldName; }).join(', ')
+  );
+}
+
+function setExternalMailboxesForUser_(sourceUserEmail, mailboxEmails) {
+  const values = normalizeExternalMailboxes_(mailboxEmails);
+  const patch = { customSchemas: {} };
+  patch.customSchemas[ZP_CONFIG.CUSTOM_SCHEMA] = {};
+  patch.customSchemas[ZP_CONFIG.CUSTOM_SCHEMA][ZP_CONFIG.EXTERNAL_MAILBOXES_FIELD] =
+    values.map(function(email) {
+      return { value: email, type: 'work' };
+    });
+
+  AdminDirectory.Users.patch(patch, sourceUserEmail);
+  return values;
+}
+
+function migrateLegacyExtraSendAsToDirectory() {
+  setupSignatureSchema();
+
+  const migrated = [];
+
+  (ZP_CONFIG.LEGACY_EXTRA_SEND_AS || []).forEach(function(mapping) {
+    const sourceUser = getWorkspaceUser_(mapping.sourceUserEmail);
+    const mailboxes = (sourceUser.externalMailboxes || []).slice();
+
+    if (mailboxes.indexOf(String(mapping.mailboxEmail).toLowerCase()) < 0) {
+      mailboxes.push(String(mapping.mailboxEmail).toLowerCase());
+    }
+
+    const saved = setExternalMailboxesForUser_(mapping.sourceUserEmail, mailboxes);
+    migrated.push({
+      sourceUserEmail: mapping.sourceUserEmail,
+      externalMailboxes: saved
+    });
+  });
+
+  console.log('Legacy extra send-as mappings migrated to Directory: ' + JSON.stringify(migrated));
+  return migrated;
+}
+
+function dynamicSendAsStatus() {
+  const mappings = extraSendAsMappings_();
+  const status = mappings.map(function(mapping) {
+    return {
+      mailboxEmail: mapping.mailboxEmail,
+      sendAsEmail: mapping.sendAsEmail,
+      sourceUserEmail: mapping.sourceUserEmail,
+      source: mapping.source
+    };
+  });
+
+  console.log(JSON.stringify(status));
+  return status;
 }
 
 function setupTestUser() {

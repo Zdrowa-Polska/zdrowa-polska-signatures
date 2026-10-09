@@ -8,7 +8,7 @@ const ASSETS_DIR = path.join(ROOT, 'assets');
 const PHOTO_DIR = path.join(ROOT, 'data', 'photos');
 const VCARD_DIR = path.join(ROOT, 'data', 'vcards');
 const SITE_DIR = path.join(ROOT, 'site');
-const PUBLIC_BASE_URL = 'https://zdrowapolska.github.io/zdrowa-polska-signatures';
+const PUBLIC_BASE_URL = 'https://zdrowa-polska.github.io/zdrowa-polska-signatures';
 
 await fs.rm(SITE_DIR, { recursive: true, force: true });
 await fs.mkdir(path.join(SITE_DIR, 'assets', 'icons'), { recursive: true });

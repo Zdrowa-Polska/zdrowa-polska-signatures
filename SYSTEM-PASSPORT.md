@@ -123,18 +123,17 @@ Service account impersonates конкретного Workspace-користува
 У Apps Script Script Properties зберігаються:
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
 - `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`
-- `GITHUB_OWNER`
 - `GITHUB_TOKEN`
 
-Значення цих секретів не повинні потрапляти в репозиторій або документацію.
+GitHub owner тепер зафіксований у коді як `Zdrowa-Polska`; у Script Properties зберігається лише `GITHUB_TOKEN` для GitHub-доступу. Значення секретів не повинні потрапляти в репозиторій або документацію.
 
 ## 9. GitHub
 
 Repository:
-`ZdrowaPolska/zdrowa-polska-signatures`
+`Zdrowa-Polska/zdrowa-polska-signatures`
 
 GitHub Pages base:
-`https://zdrowapolska.github.io/zdrowa-polska-signatures`
+`https://zdrowa-polska.github.io/zdrowa-polska-signatures`
 
 GitHub використовується як публічне сховище assets для HTML-підпису:
 - company logo;
@@ -368,9 +367,9 @@ Trigger запускає `syncSignatures` приблизно раз на год�
 - QR-код не містить персональних даних напряму, а веде на стабільний URL `.vcf`.
 
 Публічні URL:
-- vCard: `https://zdrowapolska.github.io/zdrowa-polska-signatures/contacts/<slug>.vcf`
-- QR PNG: `https://zdrowapolska.github.io/zdrowa-polska-signatures/qr/<slug>.png`
-- QR SVG (для друку): `https://zdrowapolska.github.io/zdrowa-polska-signatures/qr/<slug>.svg`
+- vCard: `https://zdrowa-polska.github.io/zdrowa-polska-signatures/contacts/<slug>.vcf`
+- QR PNG: `https://zdrowa-polska.github.io/zdrowa-polska-signatures/qr/<slug>.png`
+- QR SVG (для друку): `https://zdrowa-polska.github.io/zdrowa-polska-signatures/qr/<slug>.svg`
 
 `<slug>` = частина корпоративної e-mail адреси до символу @.
 
@@ -396,10 +395,10 @@ Trigger запускає `syncSignatures` приблизно раз на год�
 
 Для кожного працівника, для якого існує vCard, GitHub Pages автоматично генерує персональну мобільну сторінку:
 
-`https://zdrowapolska.github.io/zdrowa-polska-signatures/card/<slug>/`
+`https://zdrowa-polska.github.io/zdrowa-polska-signatures/card/<slug>/`
 
 Приклад:
-`https://zdrowapolska.github.io/zdrowa-polska-signatures/card/dhyk/`
+`https://zdrowa-polska.github.io/zdrowa-polska-signatures/card/dhyk/`
 
 Сторінка містить:
 - фото працівника;

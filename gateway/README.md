@@ -76,3 +76,7 @@ Before any VM modification, run:
 `bash gateway/scripts/preflight.sh`
 
 and review the complete output. This script is read-only.
+
+## Validation
+
+The draft PR includes an automated syntax validation workflow for Apps Script, the Pages builder, and the Python gateway files.

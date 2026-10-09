@@ -1,28 +1,22 @@
 [Unit]
-Description=Zdrowa Polska employee SMTP submission signature filter
-After=network-online.target
-Wants=network-online.target
-
+Description=Zdrowa Polska isolated employee signature filter
+After=network.target
 [Service]
 Type=simple
-User=zp-signature
-Group=zp-signature
-WorkingDirectory=/opt/zp-signature-gateway
+User=zp-sendas
+Group=zp-sendas
+WorkingDirectory=/opt/zp-sendas
 Environment=PYTHONUNBUFFERED=1
-Environment=ZP_SUBMISSION_FILTER_HOST=127.0.0.1
 Environment=ZP_SUBMISSION_FILTER_PORT=10027
-Environment=ZP_SUBMISSION_REINJECT_HOST=127.0.0.1
 Environment=ZP_SUBMISSION_REINJECT_PORT=10026
-Environment=ZP_EMPLOYEE_SIGNATURES_FILE=/opt/zp-signature-gateway/employee-signatures.json
-Environment=ZP_CORPORATE_DOMAIN=zdrowapolskagroup.pl
-ExecStart=/opt/zp-signature-gateway/venv/bin/python /opt/zp-signature-gateway/submission_filter.py
+Environment=ZP_EMPLOYEE_SIGNATURES_FILE=/opt/zp-sendas/employee-signatures.json
+ExecStart=/usr/bin/python3 /opt/zp-sendas/submission_filter.py
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadOnlyPaths=/opt/zp-signature-gateway/employee-signatures.json
-
+RestrictAddressFamilies=AF_INET AF_UNIX
 [Install]
 WantedBy=multi-user.target

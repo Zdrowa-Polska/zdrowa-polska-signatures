@@ -1,0 +1,13 @@
+[Unit]
+Description=Zdrowa Polska isolated SMTP submission authentication
+After=network.target
+[Service]
+Type=simple
+RuntimeDirectory=zp-submission-auth
+RuntimeDirectoryMode=0700
+StateDirectory=zp-submission-auth
+ExecStart=/usr/sbin/dovecot -F -c /etc/zp-sendas/dovecot.conf
+Restart=on-failure
+RestartSec=3
+[Install]
+WantedBy=multi-user.target

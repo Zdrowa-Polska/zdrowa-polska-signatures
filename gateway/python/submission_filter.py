@@ -7,7 +7,7 @@ import smtplib
 import smtpd
 from email import policy
 from email.parser import BytesParser
-from email.utils import parseaddr
+from email.utils import getaddresses
 from pathlib import Path
 
 LISTEN_HOST = os.environ.get("ZP_SUBMISSION_FILTER_HOST", "127.0.0.1")
@@ -72,9 +72,6 @@ def already_has_signature(text):
 
 
 def insert_html_signature(body, signature):
-    if already_has_signature(body):
-        return body, False
-
     decorated = HTML_MARKER + signature
     lower = body.lower()
     positions = []
@@ -83,6 +80,10 @@ def insert_html_signature(body, signature):
         pos = lower.find(marker)
         if pos >= 0:
             positions.append(pos)
+
+    current_end = min(positions) if positions else len(body)
+    if already_has_signature(body[:current_end]):
+        return body, False
 
     if positions:
         pos = min(positions)
@@ -96,14 +97,15 @@ def insert_html_signature(body, signature):
 
 
 def insert_plain_signature(body, signature):
-    if already_has_signature(body):
-        return body, False
-
     positions = []
     for pattern in PLAIN_QUOTE_PATTERNS:
         match = pattern.search(body)
         if match:
             positions.append(match.start())
+
+    current_end = min(positions) if positions else len(body)
+    if already_has_signature(body[:current_end]):
+        return body, False
 
     decorated = "\n\n" + signature.strip() + "\n\n"
 
@@ -119,6 +121,10 @@ def replace_text_part(part, new_text, subtype):
     disposition = part.get("Content-Disposition")
     content_id = part.get("Content-ID")
 
+    try:
+        new_text.encode(charset)
+    except (UnicodeEncodeError, LookupError):
+        charset = "utf-8"
     part.set_content(new_text, subtype=subtype, charset=charset)
 
     if disposition:
@@ -129,11 +135,21 @@ def replace_text_part(part, new_text, subtype):
         part["Content-ID"] = content_id
 
 
+def body_parts(msg):
+    if msg.get_content_disposition() == "attachment" or msg.get_content_type() == "message/rfc822":
+        return
+    if msg.is_multipart():
+        for child in msg.iter_parts():
+            yield from body_parts(child)
+    else:
+        yield msg
+
+
 def apply_signature(msg, signature):
     changed = False
 
     if msg.is_multipart():
-        for part in msg.walk():
+        for part in body_parts(msg):
             if part.is_multipart():
                 continue
             if (part.get_content_disposition() or "").lower() == "attachment":
@@ -190,11 +206,20 @@ def reinject(mailfrom, rcpttos, payload):
 
 class SubmissionSignatureServer(smtpd.SMTPServer):
     def process_message(self, peer, mailfrom, rcpttos, data, **kwargs):
+        try:
+            return self.handle_message(mailfrom, rcpttos, data)
+        except Exception as error:
+            print("Employee filter temporary failure: " + type(error).__name__, flush=True)
+            return "451 4.3.0 Employee signature processing temporarily unavailable"
+
+    def handle_message(self, mailfrom, rcpttos, data):
         msg = BytesParser(policy=policy.SMTP).parsebytes(data)
 
-        header_from = parseaddr(str(msg.get("From", "")))[1].lower()
+        addresses = getaddresses([str(msg.get("From", ""))])
+        if len(msg.get_all("From", [])) != 1 or len(addresses) != 1:
+            return "550 5.7.1 A single corporate From address is required"
+        header_from = addresses[0][1].lower()
         envelope_from = str(mailfrom or "").strip().lower()
-        signatures = load_signatures()
 
         if len(msg.get_all("From", [])) != 1 or not header_from.endswith("@" + CORPORATE_DOMAIN):
             return "550 5.7.1 A single corporate From address is required"
@@ -202,6 +227,7 @@ class SubmissionSignatureServer(smtpd.SMTPServer):
         if not envelope_from or envelope_from != header_from:
             return "550 5.7.1 Envelope sender must match the corporate From address"
 
+        signatures = load_signatures()
         signature = signatures.get(header_from)
         if not signature:
             return "550 5.7.1 No employee signature is configured for this sender"

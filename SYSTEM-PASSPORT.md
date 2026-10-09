@@ -419,3 +419,40 @@ Trigger запускає `syncSignatures` приблизно раз на год�
 Safari → Udostępnij → Dodaj do ekranu początkowego.
 
 Це дозволяє працівнику одним натисканням відкрити персональний QR на телефоні та показати його клієнту для сканування.
+
+
+## 26. Legacy compatibility layer po przeniesieniu GitHub owner
+
+Po przeniesieniu głównego repozytorium z konta `ZdrowaPolska` do organizacji `Zdrowa-Polska` zmienił się publiczny adres GitHub Pages.
+
+Aktualna architektura:
+- główne repozytorium produkcyjne: `Zdrowa-Polska/zdrowa-polska-signatures`;
+- aktualny GitHub Pages base URL: `https://zdrowa-polska.github.io/zdrowa-polska-signatures/`;
+- wszystkie nowe assety podpisów, vCard, QR-kody i mobilne wizytówki muszą być generowane wyłącznie z ownerem `Zdrowa-Polska`.
+
+Warstwa zgodności wstecznej:
+- osobne repozytorium legacy: `ZdrowaPolska/ZdrowaPolska.github.io`;
+- jego GitHub Pages działa pod starym originem `https://zdrowapolska.github.io/`;
+- plik `404.html` zachowuje ścieżkę starego URL i przekierowuje ją na nowy origin `https://zdrowa-polska.github.io`;
+- dzięki temu stare adresy, np.
+  `https://zdrowapolska.github.io/zdrowa-polska-signatures/contacts/dhyk.vcf`
+  są przekierowywane na
+  `https://zdrowa-polska.github.io/zdrowa-polska-signatures/contacts/dhyk.vcf`;
+- ta sama zasada obejmuje stare linki do `/card/<slug>/`, `/contacts/<slug>.vcf`, `/qr/<slug>.png`, `/qr/<slug>.svg` oraz inne stare ścieżki pod `/zdrowa-polska-signatures/`.
+
+KRYTYCZNE:
+- repozytorium `ZdrowaPolska/ZdrowaPolska.github.io` jest trwałym elementem infrastruktury;
+- NIE WOLNO go usuwać ani zmieniać jego nazwy;
+- NIE WOLNO wyłączać GitHub Pages dla tego repozytorium;
+- NIE WOLNO zmieniać starego konta GitHub `ZdrowaPolska` w sposób, który spowoduje utratę domeny `zdrowapolska.github.io`;
+- od tej warstwy zależą już wydrukowane wizytówki z QR-kodami oraz wcześniej rozesłane pracownikom linki do cyfrowych wizytówek.
+
+Weryfikacja po migracji:
+- deployment GitHub Pages repozytorium legacy zakończył się powodzeniem;
+- stary QR-kod przekazany wcześniej do drukarni został fizycznie zeskanowany po migracji i poprawnie otworzył aktualną kartę kontaktu;
+- nie ma potrzeby przedruku istniejących wizytówek ani regenerowania starych QR-kodów wyłącznie z powodu zmiany GitHub owner.
+
+Zasada na przyszłość:
+- stare URL pozostają wspierane wyłącznie przez compatibility layer;
+- dokumentacja, nowe QR-kody, nowe linki i nowo generowane assety powinny używać aktualnego base URL `https://zdrowa-polska.github.io/zdrowa-polska-signatures/`.
+

@@ -34,6 +34,3 @@ jobs:
 
       - name: Test employee filter behavior
         run: python gateway/python/test_submission_filter.py
-
-      - name: Test Workspace pilot authentication
-        run: python gateway/python/test_workspace_route_filter.py

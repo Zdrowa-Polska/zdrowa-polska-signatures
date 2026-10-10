@@ -1,0 +1,21 @@
+[Unit]
+Description=Zdrowa Polska isolated Workspace pilot route filter
+After=network.target
+[Service]
+Type=simple
+User=zp-sendas
+Group=zp-sendas
+WorkingDirectory=/opt/zp-sendas
+Environment=PYTHONUNBUFFERED=1
+Environment=ZP_SUBMISSION_REINJECT_PORT=10026
+Environment=ZP_EMPLOYEE_SIGNATURES_FILE=/opt/zp-sendas/employee-signatures.json
+ExecStart=/usr/bin/python3 /opt/zp-sendas/workspace_route_filter.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_UNIX
+[Install]
+WantedBy=multi-user.target

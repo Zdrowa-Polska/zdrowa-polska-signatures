@@ -66,6 +66,36 @@ class SenderValidation(unittest.TestCase):
         body = '<p>Text</p>' + module.HTML_MARKER + '<b>Signature</b>'
         self.assertEqual((body, False), module.insert_html_signature(body, '<b>Signature</b>'))
 
+    def test_source_signature_removed_only_from_current_html(self):
+        old = '<div class="gmail_signature"><div>Best regards, Dmytro Hyk Vitagramma <a href="mailto:dg@vitagramma.com">dg@vitagramma.com</a></div></div>'
+        body = '<p>My message mentions Vitagramma</p>' + old + '<div class="gmail_quote">' + old + '</div>'
+        updated, changed = module.insert_html_signature(body, '<b>Corporate signature</b>')
+        self.assertTrue(changed)
+        self.assertIn('<p>My message mentions Vitagramma</p>', updated)
+        self.assertEqual(updated.count(old), 1)
+        self.assertLess(updated.index('Corporate signature'), updated.index('gmail_quote'))
+
+    def test_plain_source_signature_removed_but_quote_preserved(self):
+        old = 'Best regards,\n\n*Dmytro Hyk*\n\nVitagramma\nCEO\nmob. +380 (67) 538 75 20\ne-mail: dg@vitagramma.com\nwww.vitagramma.com\n'
+        body = 'Message\n' + old + '-------- Переслане повідомлення -------\n' + old
+        updated, changed = module.insert_plain_signature(body, 'Corporate signature')
+        self.assertTrue(changed)
+        self.assertEqual(updated.count('Best regards'), 1)
+        self.assertIn('Message', updated)
+        self.assertLess(updated.index('Corporate signature'), updated.index('Переслане'))
+
+    def test_unrelated_signature_is_not_removed(self):
+        old = '<div class="gmail_signature">Vitagramma colleague@example.org</div>'
+        updated, _ = module.insert_html_signature(old, 'Corporate signature')
+        self.assertIn(old, updated)
+
+    def test_old_signature_removed_even_when_corporate_already_present(self):
+        old = '<div class="gmail_signature">Vitagramma dg@vitagramma.com</div>'
+        updated, changed = module.insert_html_signature(old + module.HTML_MARKER + 'Corporate signature', 'Corporate signature')
+        self.assertTrue(changed)
+        self.assertNotIn('Vitagramma', updated)
+        self.assertEqual(updated.count('Corporate signature'), 1)
+
     def test_attachments_preserved(self):
         msg = EmailMessage()
         msg.set_content('Hello')

@@ -15,6 +15,7 @@ const ZP_CONFIG = Object.freeze({
   GITHUB_BRANCH: 'main',
   PHOTOS_PATH: 'data/photos',
   VCARDS_PATH: 'data/vcards',
+  GATEWAY_SIGNATURES_PATH: 'data/gateway-signatures',
   ASSET_BASE_URL: 'https://zdrowa-polska.github.io/zdrowa-polska-signatures',
 
   TEST_LINKEDIN: 'https://www.linkedin.com/in/dhyk/',
@@ -557,6 +558,53 @@ function buildSignatureHtml_(user, photoUrl) {
     '</table>';
 }
 
+
+function buildPlainTextSignature_(user) {
+  const lines = [
+    '-- ',
+    user.fullName || user.email
+  ];
+
+  if (user.jobTitle) lines.push(user.jobTitle);
+  lines.push(ZP_CONFIG.COMPANY);
+  if (user.phone) lines.push('Tel: ' + user.phone);
+  lines.push('Email: ' + user.email);
+  lines.push('Strona: ' + ZP_CONFIG.WEBSITE);
+  lines.push('');
+  lines.push(DISCLAIMER_PL);
+  lines.push('');
+  lines.push(DISCLAIMER_EN);
+
+  return lines.join('\n');
+}
+
+function syncGatewaySignature_(user, photoUrl, html) {
+  const slug = slugFromEmail_(user.email);
+  const payload = {
+    version: 1,
+    email: String(user.email).toLowerCase(),
+    html: html || buildSignatureHtml_(user, photoUrl),
+    text: buildPlainTextSignature_(user)
+  };
+
+  return githubPutBytesIfChanged_(
+    ZP_CONFIG.GATEWAY_SIGNATURES_PATH + '/' + slug + '.json',
+    Utilities.newBlob(
+      JSON.stringify(payload),
+      'application/json',
+      slug + '.json'
+    ).getBytes(),
+    'Update gateway signature for ' + user.email
+  );
+}
+
+function removeGatewaySignature_(user) {
+  return githubDeleteIfExists_(
+    ZP_CONFIG.GATEWAY_SIGNATURES_PATH + '/' + slugFromEmail_(user.email) + '.json',
+    'Remove gateway signature for ' + user.email
+  );
+}
+
 function base64UrlText_(text) {
   return Utilities.base64EncodeWebSafe(String(text)).replace(/=+$/g, '');
 }
@@ -914,6 +962,7 @@ function disableExtraSendAs() {
 function syncEnabledUser_(user) {
   const photoUrl = syncPhoto_(user);
   const desiredHtml = buildSignatureHtml_(user, photoUrl);
+  syncGatewaySignature_(user, photoUrl, desiredHtml);
   const desiredHash = textHash_(desiredHtml);
 
   const props = PropertiesService.getScriptProperties();
@@ -937,6 +986,8 @@ function syncEnabledUser_(user) {
 }
 
 function syncDisabledUser_(user) {
+  removeGatewaySignature_(user);
+
   if (!isManaged_(user.email)) {
     return { action: 'ignored', email: user.email };
   }
@@ -1016,8 +1067,9 @@ function stageLaunchAssets() {
 
   users.forEach(function(user) {
     if (!user.enabled) return;
-    syncPhoto_(user);
+    const photoUrl = syncPhoto_(user);
     syncVCard_(user);
+    syncGatewaySignature_(user, photoUrl, buildSignatureHtml_(user, photoUrl));
     staged++;
   });
 

@@ -1,0 +1,36 @@
+name: Validate SMTP gateway staging
+
+on:
+  pull_request:
+    paths:
+      - 'apps-script/Combined.gs'
+      - 'scripts/build.mjs'
+      - 'gateway/**'
+      - '.github/workflows/validate-smtp-gateway.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check Apps Script syntax
+        run: |
+          cp apps-script/Combined.gs /tmp/Combined.js
+          node --check /tmp/Combined.js
+      - name: Check Pages builder syntax
+        run: node --check scripts/build.mjs
+      - name: Check gateway Python syntax
+        run: python -m py_compile gateway/python/*.py
+
+      - name: Test employee filter behavior
+        run: python gateway/python/test_submission_filter.py

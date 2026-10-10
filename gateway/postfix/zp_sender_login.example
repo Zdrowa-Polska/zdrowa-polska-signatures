@@ -1,0 +1,3 @@
+# Envelope sender -> authenticated SMTP username.
+# One employee per line. Never allow one login to send as another employee.
+dhyk@zdrowapolskagroup.pl dhyk@zdrowapolskagroup.pl

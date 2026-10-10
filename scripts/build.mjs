@@ -7,6 +7,7 @@ const ROOT = process.cwd();
 const ASSETS_DIR = path.join(ROOT, 'assets');
 const PHOTO_DIR = path.join(ROOT, 'data', 'photos');
 const VCARD_DIR = path.join(ROOT, 'data', 'vcards');
+const GATEWAY_SIGNATURE_DIR = path.join(ROOT, 'data', 'gateway-signatures');
 const SITE_DIR = path.join(ROOT, 'site');
 const PUBLIC_BASE_URL = 'https://zdrowa-polska.github.io/zdrowa-polska-signatures';
 
@@ -16,6 +17,7 @@ await fs.mkdir(path.join(SITE_DIR, 'photos'), { recursive: true });
 await fs.mkdir(path.join(SITE_DIR, 'contacts'), { recursive: true });
 await fs.mkdir(path.join(SITE_DIR, 'qr'), { recursive: true });
 await fs.mkdir(path.join(SITE_DIR, 'card'), { recursive: true });
+await fs.mkdir(path.join(SITE_DIR, 'gateway-signatures'), { recursive: true });
 
 function unfoldVCard(text) {
   return String(text).replace(/\r?\n[ \t]/g, '');
@@ -255,10 +257,49 @@ try {
   if (e && e.code !== 'ENOENT') throw e;
 }
 
+try {
+  const names = (await fs.readdir(GATEWAY_SIGNATURE_DIR))
+    .filter(name => !name.startsWith('.') && path.extname(name).toLowerCase() === '.json')
+    .sort();
+
+  const manifest = [];
+
+  for (const name of names) {
+    const sourcePath = path.join(GATEWAY_SIGNATURE_DIR, name);
+    const targetPath = path.join(SITE_DIR, 'gateway-signatures', name);
+    const raw = await fs.readFile(sourcePath, 'utf8');
+    const data = JSON.parse(raw);
+
+    if (!data || !data.email || !data.html || !data.text) {
+      throw new Error(`Invalid gateway signature file: ${name}`);
+    }
+
+    await fs.writeFile(targetPath, JSON.stringify(data), 'utf8');
+    manifest.push({
+      email: String(data.email).toLowerCase(),
+      file: name
+    });
+  }
+
+  await fs.writeFile(
+    path.join(SITE_DIR, 'gateway-signatures', 'manifest.json'),
+    JSON.stringify({ version: 1, signatures: manifest }),
+    'utf8'
+  );
+} catch (e) {
+  if (e && e.code !== 'ENOENT') throw e;
+
+  await fs.writeFile(
+    path.join(SITE_DIR, 'gateway-signatures', 'manifest.json'),
+    JSON.stringify({ version: 1, signatures: [] }),
+    'utf8'
+  );
+}
+
 await fs.writeFile(
   path.join(SITE_DIR, 'index.html'),
   '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>Zdrowa Polska signature assets</title>',
   'utf8'
 );
 
-console.log('Published Gmail signature assets, employee vCards, printable QR codes and mobile business cards.');
+console.log('Published Gmail signature assets, employee vCards, printable QR codes, mobile business cards and SMTP gateway signatures.');

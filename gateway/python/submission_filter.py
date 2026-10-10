@@ -5,6 +5,7 @@ import os
 import re
 import smtplib
 import smtpd
+from html.parser import HTMLParser
 from email import policy
 from email.parser import BytesParser
 from email.utils import getaddresses
@@ -34,6 +35,7 @@ HTML_QUOTE_MARKERS = (
 
 PLAIN_QUOTE_PATTERNS = (
     re.compile(r"(?im)^-{2,}\s*Forwarded message\s*-{2,}\s*$"),
+    re.compile(r"(?im)^-{2,}\s*Переслане повідомлення\s*-{2,}\s*$"),
     re.compile(r"(?im)^-{2,}\s*Wiadomość przekazana\s*-{2,}\s*$"),
     re.compile(r"(?im)^-----Original Message-----\s*$"),
     re.compile(r"(?im)^.+\b(?:wrote|napisał|napisała|napisał\(a\)|пише|писав|написав|написала|написал):\s*$"),
@@ -71,6 +73,59 @@ def already_has_signature(text):
     )
 
 
+
+class GmailSignatureSpans(HTMLParser):
+    """Locate complete Gmail signature elements without rewriting other markup."""
+    def __init__(self, source):
+        super().__init__(convert_charrefs=False)
+        self.source = source
+        self.lines = [0]
+        for match in re.finditer("\n", source):
+            self.lines.append(match.end())
+        self.stack = []
+        self.spans = []
+
+    def source_offset(self):
+        line, column = self.getpos()
+        return self.lines[line - 1] + column
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "div":
+            classes = dict(attrs).get("class", "").split()
+            self.stack.append((self.source_offset(), "gmail_signature" in classes))
+
+    def handle_endtag(self, tag):
+        if tag == "div" and self.stack:
+            start, signature = self.stack.pop()
+            if signature:
+                end = self.source.find(">", self.source_offset()) + 1
+                self.spans.append((start, end))
+
+
+def remove_source_html_signature(body, current_end):
+    parser = GmailSignatureSpans(body[:current_end])
+    parser.feed(body[:current_end])
+    spans = []
+    for start, end in parser.spans:
+        block = body[start:end].lower()
+        if ("vitagramma" in block and "dg@vitagramma.com" in block
+                and "zdrowa polska" not in block):
+            spans.append((start, end))
+    for start, end in sorted(spans, reverse=True):
+        body = body[:start] + body[end:]
+    return body, bool(spans)
+
+
+SOURCE_PLAIN_SIGNATURE = re.compile(
+    r"(?im)^Best regards,?[ \t]*\r?\n(?:[ \t]*\r?\n)*"
+    r"\*?Dmytro Hyk\*?[ \t]*\r?\n(?:[ \t]*\r?\n)*"
+    r"Vitagramma[ \t]*\r?\nCEO[ \t]*\r?\n"
+    r"mob\.[^\r\n]*\r?\n"
+    r"e-mail:[ \t]*dg@vitagramma\.com[ \t]*\r?\n"
+    r"www\.vitagramma\.com[ \t]*(?:\r?\n|$)"
+)
+
+
 def insert_html_signature(body, signature):
     decorated = HTML_MARKER + signature
     lower = body.lower()
@@ -82,8 +137,12 @@ def insert_html_signature(body, signature):
             positions.append(pos)
 
     current_end = min(positions) if positions else len(body)
+    body, removed = remove_source_html_signature(body, current_end)
+    lower = body.lower()
+    positions = [lower.find(marker) for marker in HTML_QUOTE_MARKERS if lower.find(marker) >= 0]
+    current_end = min(positions) if positions else len(body)
     if already_has_signature(body[:current_end]):
-        return body, False
+        return body, removed
 
     if positions:
         pos = min(positions)
@@ -104,8 +163,12 @@ def insert_plain_signature(body, signature):
             positions.append(match.start())
 
     current_end = min(positions) if positions else len(body)
+    current, removed = SOURCE_PLAIN_SIGNATURE.subn("", body[:current_end])
+    body = current + body[current_end:]
+    positions = [match.start() for pattern in PLAIN_QUOTE_PATTERNS for match in [pattern.search(body)] if match]
+    current_end = min(positions) if positions else len(body)
     if already_has_signature(body[:current_end]):
-        return body, False
+        return body, bool(removed)
 
     decorated = "\n\n" + signature.strip() + "\n\n"
 

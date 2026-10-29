@@ -1,0 +1,12 @@
+[Unit]
+Description=Synchronize employee profiles from Google Workspace export
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/zp-sendas/profile_sync.py
+TimeoutStartSec=60
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true

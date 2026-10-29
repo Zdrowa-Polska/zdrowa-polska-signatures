@@ -15,13 +15,18 @@ LOAD_NEW = '''def load_signatures():
         return unified
 '''
 NORMALIZE = '        gateway_safety.normalize_sender(msg, header_from)\n        optout ='
-NORMALIZE_NEW = '''        gateway_safety.normalize_sender(msg, header_from)
+NORMALIZE_V1 = '''        gateway_safety.normalize_sender(msg, header_from)
         import profile_runtime
         msg = profile_runtime.canonicalize_message(msg, signature, replace_text_part)
         if signature.get('enabled') is False:
             reinject(mailfrom, rcpttos, smtp_bytes(msg))
             return None
         optout ='''
+NORMALIZE_NEW = NORMALIZE_V1.replace(
+    '        msg = profile_runtime.canonicalize_message(msg, signature, replace_text_part)',
+    '        # Preserve ambiguous or signed internal messages.\n'
+    '        if not recipient_policy.internal_only(msg, rcpttos):\n'
+    '            msg = profile_runtime.canonicalize_message(msg, signature, replace_text_part)')
 ALLOWED = "        allowed.add('test.skoki@zdrowapolskagroup.pl')"
 ALLOWED_NEW = '''        import profile_runtime
         unified_allowed = profile_runtime.allowed_senders()
@@ -39,6 +44,8 @@ def patch(source, before, after):
 def patched_sources(base):
     submission = (base/'submission_filter.py').read_text()
     submission = patch(submission, LOAD, LOAD_NEW)
+    if NORMALIZE_V1 in submission:
+        submission = submission.replace(NORMALIZE_V1, NORMALIZE_NEW)
     submission = patch(submission, NORMALIZE, NORMALIZE_NEW)
     route = patch((base/'workspace_route_filter.py').read_text(), ALLOWED, ALLOWED_NEW)
     compile(submission, 'submission_filter.py', 'exec')

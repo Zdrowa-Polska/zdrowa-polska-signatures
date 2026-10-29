@@ -2,6 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
 import QRCode from 'qrcode';
+import { createHash } from 'node:crypto';
+import { profileCards } from './profile-model.mjs';
 
 const ROOT = process.cwd();
 const ASSETS_DIR = path.join(ROOT, 'assets');
@@ -79,6 +81,7 @@ function cardHtml(data) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
+<meta name="profile-revision" content="${htmlEscape(data.revision || '')}">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -139,6 +142,35 @@ h1{font-size:28px;line-height:1.1;margin:0 0 6px}
     </section>
   </main>
 </div>
+${data.id ? `<script>
+(() => {
+  const expected = ${JSON.stringify(data.revision)};
+  let checking = false;
+  async function refresh() {
+    if (checking || document.visibilityState === 'hidden') return;
+    checking = true;
+    try {
+      const r = await fetch(${JSON.stringify(`${PUBLIC_BASE_URL}/profiles/${data.id}.json`)}, {cache:'no-store'});
+      if (r.status === 404) {
+        document.querySelector('main').textContent = 'Ta wizytówka nie jest już dostępna.';
+        return;
+      }
+      if (!r.ok) return;
+      const profile = await r.json();
+      if (!profile.active) {
+        document.querySelector('main').textContent = 'Ta wizytówka nie jest już dostępna.';
+      } else if (profile.revision !== expected) {
+        const url = new URL(location.href);
+        url.searchParams.set('profile_version', profile.revision);
+        location.replace(url.href);
+      }
+    } catch (_) { /* Keep last visible card when the phone is offline. */ }
+    finally { checking = false; }
+  }
+  addEventListener('pageshow', refresh);
+  document.addEventListener('visibilitychange', refresh);
+})();
+</script>` : ''}
 </body>
 </html>`;
 }
@@ -194,7 +226,20 @@ for (const name of await fs.readdir(PHOTO_DIR)) {
 }
 
 try {
-  const vcardNames = await fs.readdir(VCARD_DIR);
+  let unified = null;
+  try { unified = JSON.parse(await fs.readFile(path.join(ROOT, 'data/unified-profiles.json'), 'utf8')); }
+  catch (e) { if (e.code !== 'ENOENT') throw e; }
+  const cards = unified ? profileCards(unified) : null;
+  const vcardNames = cards ? cards.map(p => `${p.slug}.vcf`) : await fs.readdir(VCARD_DIR);
+  const bySlug = new Map((cards || []).map(p => [p.slug, p]));
+  if (unified) {
+    await fs.mkdir(path.join(SITE_DIR, 'profiles'), {recursive: true});
+    for (const p of unified.profiles) {
+      const revision = createHash('sha256').update(JSON.stringify(p)).digest('hex');
+      await fs.writeFile(path.join(SITE_DIR, 'profiles', `${p.id}.json`),
+        JSON.stringify({active: p.active && p.enabled, revision}));
+    }
+  }
 
   for (const name of vcardNames) {
     if (name.startsWith('.') || path.extname(name).toLowerCase() !== '.vcf') continue;
@@ -206,7 +251,9 @@ try {
     const qrUrl = `${PUBLIC_BASE_URL}/qr/${encodeURIComponent(slug)}.svg`;
     const cardDir = path.join(SITE_DIR, 'card', slug);
 
-    await fs.copyFile(sourcePath, targetVcf);
+    const profile = bySlug.get(slug);
+    if (profile) await fs.writeFile(targetVcf, profile.vcard);
+    else await fs.copyFile(sourcePath, targetVcf);
 
     await QRCode.toFile(
       path.join(SITE_DIR, 'qr', `${slug}.png`),
@@ -220,18 +267,19 @@ try {
       { errorCorrectionLevel: 'H', margin: 4, type: 'svg' }
     );
 
-    const vcardText = await fs.readFile(sourcePath, 'utf8');
+    const vcardText = profile ? profile.vcard : await fs.readFile(sourcePath, 'utf8');
     const fullName = vCardValue(vcardText, 'FN') || slug;
     const title = vCardValue(vcardText, 'TITLE');
     const phone = vCardValue(vcardText, 'TEL');
     const email = vCardValue(vcardText, 'EMAIL');
     const linkedin = vCardValue(vcardText, 'X-SOCIALPROFILE');
-    const photoUrl = `${PUBLIC_BASE_URL}/photos/${encodeURIComponent(slug)}.png`;
+    const photoUrl = profile ? profile.photoUrl : `${PUBLIC_BASE_URL}/photos/${encodeURIComponent(slug)}.png`;
 
     await fs.mkdir(cardDir, { recursive: true });
     await fs.writeFile(
       path.join(cardDir, 'index.html'),
-      cardHtml({ fullName, title, phone, email, linkedin, vcardUrl: contactUrl, qrUrl, photoUrl }),
+      cardHtml({ fullName, title, phone, email, linkedin, vcardUrl: contactUrl, qrUrl, photoUrl,
+        id: profile?.id, revision: profile?.revision }),
       'utf8'
     );
 

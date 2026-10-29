@@ -19,7 +19,18 @@ function publisher() {
     DISCLAIMER_PL:'PL',DISCLAIMER_EN:'EN', console
   });
   vm.runInContext(fs.readFileSync('apps-script/UnifiedProfileSync.gs','utf8'),context);
-  return (users,history={})=>JSON.parse(JSON.stringify(context.unifiedSnapshot_(users,history)));
+  const publish=(users,history={})=>JSON.parse(JSON.stringify(context.unifiedSnapshot_(users,history)));
+  publish.syncGroup=(users,members)=>{
+    const changes=[];
+    context.AdminDirectory={Members:{
+      list:group=>{assert.equal(group,'signature-profile-sync@zdrowapolskagroup.pl');return {members};},
+      insert:(member,group)=>changes.push(['insert',member.email,group]),
+      remove:(group,id)=>changes.push(['remove',id,group])
+    }};
+    context.syncProfileRoutingGroup_(users);
+    return changes;
+  };
+  return publish;
 }
 const raw = () => ({id:'permanent-google-id',primaryEmail:'malgorzata@zdrowapolskagroup.pl',
   name:{fullName:'Małgorzata Bojanowska'},enabled:true,title:'CEO',phone:'123',aliases:[]});
@@ -71,4 +82,15 @@ test('deleted employees publish anonymous tombstones and keep their URL reserved
   assert.equal(result.snapshot.profiles[0].active,false);
   assert.equal(result.snapshot.profiles[0].email,undefined);
   assert.equal(profileCards(result.snapshot).length,0);
+});
+test('routing group follows enrollment by Google ID and survives primary email rename',()=>{
+  const publish=publisher(),a=raw();
+  a.primaryEmail='mbojanowska@zdrowapolskagroup.pl';
+  assert.deepEqual(publish.syncGroup([a],[{id:a.id,email:'malgorzata@zdrowapolskagroup.pl'}]),[]);
+  a.enabled=false;
+  assert.deepEqual(publish.syncGroup([a],[{id:a.id}]),
+    [['remove',a.id,'signature-profile-sync@zdrowapolskagroup.pl']]);
+  a.enabled=true;
+  assert.deepEqual(publish.syncGroup([a],[]),
+    [['insert',a.primaryEmail,'signature-profile-sync@zdrowapolskagroup.pl']]);
 });

@@ -57,7 +57,7 @@ def main():
     backup=Path('/root/zp-profile-sync-backup-'+datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d-%H%M%S'))
     backup.mkdir(mode=0o700)
     for src in [args.base, Path('/etc/postfix'), Path('/etc/zp-sendas')]:
-        shutil.copytree(src,backup/src.name)
+        shutil.copytree(src, backup / str(src).lstrip('/'))
     for name,content in files.items():
         temp=args.base/(name+'.profile-sync-next');temp.write_text(content)
         temp.chmod(0o644);os.replace(temp,args.base/name)

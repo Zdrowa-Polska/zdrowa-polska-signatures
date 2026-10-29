@@ -152,7 +152,7 @@ def main():
     atomic(STATE, json.dumps(state).encode(), 0o600)
     for email in state['managed_addresses']:
         login_map.pop(email, None)
-        route_map.pop(email, None)
+        route_map[email] = 'REJECT This corporate sender is no longer active'
     login_map.update(logins)
     route_map.update({email: 'OK' for email in runtime['allowed_senders']})
     update_postfix_map(LOGIN_MAP, login_map)

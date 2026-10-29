@@ -67,6 +67,11 @@ def main():
     for name in ('zp-profile-sync.service','zp-profile-sync.timer'):
         shutil.copy2(here/name,Path('/etc/systemd/system')/name)
     subprocess.run(['systemctl','daemon-reload'],check=True)
+    # Unknown newly renamed enrolled senders wait for the next Directory export instead of bouncing.
+    subprocess.run(['/usr/sbin/postconf','-P',
+      '0.0.0.0:2525/inet/smtpd_sender_restrictions=check_sender_access,hash:/etc/postfix/zp_workspace_pilot_sender,defer'],check=True)
+    subprocess.run(['/usr/sbin/postfix','check'],check=True)
+    subprocess.run(['/usr/sbin/postfix','reload'],check=True)
     subprocess.run(['systemctl','restart','zp-employee-submission-filter','zp-workspace-pilot-filter'],check=True)
     print('Installed dormant integration. Timer is NOT enabled until a validated source exists.')
     print('Backup:',backup)

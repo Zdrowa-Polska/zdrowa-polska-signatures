@@ -1,5 +1,27 @@
 /* Uses the existing Directory/Gmail renderer; raw Google IDs never leave Script Properties. */
 const ZP_UNIFIED_PATH = 'data/unified-profiles.json';
+const ZP_PROFILE_ROUTING_GROUP = 'signature-profile-sync@zdrowapolskagroup.pl';
+
+function syncProfileRoutingGroup_(rawUsers) {
+  const desired = {};
+  rawUsers.forEach(function(raw) {
+    const u = workspaceUserFromRaw_(raw);
+    if (u.enabled && !raw.suspended && !raw.archived) desired[String(raw.id)] = u.email;
+  });
+  const existing = {}; let pageToken;
+  do {
+    const page = AdminDirectory.Members.list(ZP_PROFILE_ROUTING_GROUP, {maxResults: 200, pageToken: pageToken});
+    (page.members || []).forEach(function(m) { existing[String(m.id)] = m; });
+    pageToken = page.nextPageToken;
+  } while (pageToken);
+  Object.keys(desired).forEach(function(id) {
+    if (!existing[id]) AdminDirectory.Members.insert({email: desired[id], role: 'MEMBER'}, ZP_PROFILE_ROUTING_GROUP);
+  });
+  Object.keys(existing).forEach(function(id) {
+    if (!desired[id]) AdminDirectory.Members.remove(ZP_PROFILE_ROUTING_GROUP, id);
+  });
+  return Object.keys(desired).length;
+}
 
 function unifiedDirectoryUsers_() {
   const users = [];
@@ -106,7 +128,8 @@ function syncUnifiedProfiles() {
   const props = PropertiesService.getScriptProperties();
   try {
     const previous = JSON.parse(props.getProperty('ZP_UNIFIED_HISTORY') || '{}');
-    const result = unifiedSnapshot_(unifiedDirectoryUsers_(), previous);
+    const rawUsers = unifiedDirectoryUsers_();
+    const result = unifiedSnapshot_(rawUsers, previous);
     const content = JSON.stringify(result.snapshot);
     // Publish only complete Directory reads. Any rendering/read failure keeps last good snapshot.
     const changed = githubPutBytesIfChanged_(ZP_UNIFIED_PATH,
@@ -117,6 +140,8 @@ function syncUnifiedProfiles() {
     props.deleteProperty('ZP_UNIFIED_LAST_ERROR');
     // Existing code remains responsible for primary and configured extra Gmail signatures.
     syncSignatures();
+    // This group is used only by the outbound routing filter, never for mail distribution.
+    syncProfileRoutingGroup_(rawUsers);
     props.setProperty('ZP_UNIFIED_LAST_SUCCESS', new Date().toISOString());
     console.log(JSON.stringify({unifiedProfiles: result.snapshot.profiles.length, changed: changed}));
     return {profiles: result.snapshot.profiles.length, changed: changed};

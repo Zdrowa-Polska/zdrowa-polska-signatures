@@ -4,7 +4,7 @@ Google Workspace Directory is the only editable source for the fields already sh
 
 ## Data flow
 
-`UnifiedProfileSync.gs` runs every five minutes in the existing Apps Script project. It reads the complete Directory, renders profiles using the existing renderer, updates Gmail using the existing sync, and publishes one complete `data/unified-profiles.json` document only after all profiles render successfully. It reuses the existing Directory/Gmail/GitHub permissions. Script Properties retain the immutable identity and historical URL reservations; public IDs are SHA-256 hashes of Google user IDs.
+`UnifiedProfileSync.gs` runs every five minutes in the existing Apps Script project. It reads the complete Directory, renders profiles using the existing renderer, updates Gmail using the existing sync, and publishes one complete `data/unified-profiles.json` document only after all profiles render successfully. It reuses the existing renderer and Gmail/GitHub permissions. The separately approved admin.directory.group.member scope maintains only signature-profile-sync@zdrowapolskagroup.pl, a restricted technical group with posting disabled. Script Properties retain the immutable identity and historical URL reservations; public IDs are SHA-256 hashes of Google user IDs.
 
 GitHub Pages builds cards and vCards from this document. Historical slugs point to current profile data, so an existing Home Screen bookmark survives a primary-email rename. Pages refresh when opened or brought to the foreground. A downloaded vCard in somebody else's Contacts app and an already delivered email are independent copies, not live subscriptions.
 
@@ -20,7 +20,7 @@ A false EmailSignature removes cards and outgoing signatures while preserving ma
 4. Run `syncUnifiedProfiles` manually. Verify Directory counts, publication, Gmail execution logs, and the Pages deployment.
 5. Stage gateway files; run `python3 gateway/install.py --check-only` against the live code. Installer takes a root-only backup before the additive integration and leaves its timer dormant.
 6. Run server `profile_sync.py --dry-run`, review immutable identity/SMTP bindings, then activate it and enable `zp-profile-sync.timer`.
-7. Check the Google Workspace outbound routing policy separately: an email-based static sender regex MUST be replaced by an enrollment-independent route before claiming automatic rename support. Do not broaden the rule without verifying that clinic, group, test, opt-out, and internal-recipient flows still have the intended behavior.
+7. Change only rule 10f0f (Signature Gateway - pracownicy): keep outgoing/internal outgoing, active user accounts, TLS, proof header and route unchanged; replace its static sender regex with Group membership of signature-profile-sync@zdrowapolskagroup.pl. The group contains exactly active Directory users with EmailSignature=true. Do not broaden routing to the entire domain. The clinic rule and delegated Test Skoki flow remain separate. The authenticated Workspace port temporarily defers unknown renamed senders until the next complete snapshot; inactive known senders are explicitly rejected.
 8. Run `enableUnifiedProfileSync`, which completes a sync before replacing the old hourly schedule. Check `unifiedProfileSyncStatus` and the server journal/timer.
 
 ## Operational checks

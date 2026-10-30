@@ -1,0 +1,13 @@
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Zdrowa Polska S.A.//Business Card//PL
+N;CHARSET=UTF-8:Lewandowska;Natalia;;;
+FN;CHARSET=UTF-8:Natalia Lewandowska
+ORG;CHARSET=UTF-8:Zdrowa Polska S.A.
+TITLE;CHARSET=UTF-8:Dyrektor ds. Zarządzania Placówkami Medycznymi
+TEL;TYPE=WORK,VOICE:+48 666 059 879
+EMAIL;TYPE=INTERNET,WORK:nlewandowska@zdrowapolskagroup.pl
+URL;TYPE=WORK:https://zdrowapolskagroup.pl/
+X-SOCIALPROFILE;TYPE=linkedin:https://www.linkedin.com/in/natalia-l-21884b
+ 211/
+END:VCARD

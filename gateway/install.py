@@ -22,11 +22,19 @@ NORMALIZE_V1 = '''        gateway_safety.normalize_sender(msg, header_from)
             reinject(mailfrom, rcpttos, smtp_bytes(msg))
             return None
         optout ='''
-NORMALIZE_NEW = NORMALIZE_V1.replace(
+NORMALIZE_V2 = NORMALIZE_V1.replace(
     '        msg = profile_runtime.canonicalize_message(msg, signature, replace_text_part)',
     '        # Preserve ambiguous or signed internal messages.\n'
     '        if not recipient_policy.internal_only(msg, rcpttos):\n'
     '            msg = profile_runtime.canonicalize_message(msg, signature, replace_text_part)')
+NORMALIZE_NEW = NORMALIZE_V2.replace(
+    '            msg = profile_runtime.canonicalize_message(msg, signature, replace_text_part)',
+    '            import profile_delivery\n'
+    '            candidate = profile_delivery.prepare(msg, signature, replace_text_part)\n'
+    '            if candidate is None:\n'
+    '                reinject(mailfrom, rcpttos, smtp_bytes(msg))\n'
+    '                return None\n'
+    '            msg = candidate')
 ALLOWED = "        allowed.add('test.skoki@zdrowapolskagroup.pl')"
 ALLOWED_NEW = '''        import profile_runtime
         unified_allowed = profile_runtime.allowed_senders()
@@ -46,6 +54,8 @@ def patched_sources(base):
     submission = patch(submission, LOAD, LOAD_NEW)
     if NORMALIZE_V1 in submission:
         submission = submission.replace(NORMALIZE_V1, NORMALIZE_NEW)
+    if NORMALIZE_V2 in submission:
+        submission = submission.replace(NORMALIZE_V2, NORMALIZE_NEW)
     submission = patch(submission, NORMALIZE, NORMALIZE_NEW)
     route = patch((base/'workspace_route_filter.py').read_text(), ALLOWED, ALLOWED_NEW)
     compile(submission, 'submission_filter.py', 'exec')
@@ -71,6 +81,7 @@ def main():
     here=Path(__file__).resolve().parent
     shutil.copy2(here/'profile_runtime.py',args.base/'profile_runtime.py')
     shutil.copy2(here/'profile_sync.py',args.base/'profile_sync.py')
+    shutil.copy2(here/'profile_delivery.py',args.base/'profile_delivery.py')
     for name in ('zp-profile-sync.service','zp-profile-sync.timer'):
         shutil.copy2(here/name,Path('/etc/systemd/system')/name)
     subprocess.run(['systemctl','daemon-reload'],check=True)
@@ -84,3 +95,4 @@ def main():
     print('Backup:',backup)
 
 if __name__=='__main__':main()
+

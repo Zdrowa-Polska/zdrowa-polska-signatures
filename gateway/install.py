@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import polish_quote_boundary
 
 LOAD = 'def load_signatures():\n'
 LOAD_NEW = '''def load_signatures():
@@ -58,9 +59,11 @@ def patched_sources(base):
         submission = submission.replace(NORMALIZE_V2, NORMALIZE_NEW)
     submission = patch(submission, NORMALIZE, NORMALIZE_NEW)
     route = patch((base/'workspace_route_filter.py').read_text(), ALLOWED, ALLOWED_NEW)
+    mobile = polish_quote_boundary.patch_source((base/'mobile_choice.py').read_text())
+    compile(mobile, 'mobile_choice.py', 'exec')
     compile(submission, 'submission_filter.py', 'exec')
     compile(route, 'workspace_route_filter.py', 'exec')
-    return {'submission_filter.py': submission, 'workspace_route_filter.py': route}
+    return {'submission_filter.py': submission, 'workspace_route_filter.py': route, 'mobile_choice.py': mobile}
 
 def main():
     parser=argparse.ArgumentParser()
@@ -95,4 +98,5 @@ def main():
     print('Backup:',backup)
 
 if __name__=='__main__':main()
+
 

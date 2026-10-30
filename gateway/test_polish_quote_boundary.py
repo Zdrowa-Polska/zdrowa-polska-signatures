@@ -1,5 +1,3 @@
-import copy
-import json
 import sys
 import unittest
 from email.message import EmailMessage
@@ -34,6 +32,15 @@ class QuoteBoundaryTests(unittest.TestCase):
     def test_preserves_business_signature_like_text(self):
         body = 'KEEP employee@zdrowapolskagroup.pl in business text\r\n' + self.header()
         self.assertEqual(mobile.plain_current_end(body), len('KEEP employee@zdrowapolskagroup.pl in business text\r\n'))
+
+    def test_patch_is_idempotent_and_rejects_unknown_code(self):
+        source = mobile.LEGACY_FUNCTION + '\n\ndef another(): return 1\n'
+        patched = mobile.patch_source(source)
+        self.assertEqual(mobile.patch_source(patched), patched)
+        self.assertIn('def another(): return 1', patched)
+        compile(patched, '<patched>', 'exec')
+        with self.assertRaises(ValueError):
+            mobile.patch_source(source.replace('len(body)', '0'))
 
     def test_existing_english_boundary_wins(self):
         body = 'KEEP\nOn Thursday Sender wrote:\n> OLD\n' + self.header()

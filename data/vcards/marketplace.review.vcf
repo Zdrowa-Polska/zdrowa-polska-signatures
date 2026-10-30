@@ -1,0 +1,9 @@
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Zdrowa Polska S.A.//Business Card//PL
+N;CHARSET=UTF-8:Review;Marketplace;;;
+FN;CHARSET=UTF-8:Marketplace Review
+ORG;CHARSET=UTF-8:Zdrowa Polska S.A.
+EMAIL;TYPE=INTERNET,WORK:marketplace.review@zdrowapolskagroup.pl
+URL;TYPE=WORK:https://zdrowapolskagroup.pl/
+END:VCARD

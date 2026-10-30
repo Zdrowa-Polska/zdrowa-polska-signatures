@@ -21,9 +21,9 @@ class QuoteBoundaryTests(unittest.TestCase):
                     body = 'KEEP CURRENT TEXT\r\n\r\n' + self.header(weekday, wrap)
                     self.assertEqual(mobile.plain_current_end(body), len('KEEP CURRENT TEXT\r\n\r\n'))
 
-    def test_not_a_quote_without_following_quoted_body(self):
+    def test_google_plain_alternative_without_angle_quote_markers(self):
         body = 'KEEP\r\n' + self.header().replace('> QUOTED CONTENT', 'UNQUOTED CONTENT')
-        self.assertEqual(mobile.plain_current_end(body), len(body))
+        self.assertEqual(mobile.plain_current_end(body), len('KEEP\r\n'))
 
     def test_email_required(self):
         body = 'KEEP\r\n' + self.header().replace('sender@example.org', 'no-address')

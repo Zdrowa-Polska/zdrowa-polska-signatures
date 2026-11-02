@@ -43,6 +43,11 @@ ALLOWED_NEW = '''        import profile_runtime
             allowed = unified_allowed
         allowed.add('test.skoki@zdrowapolskagroup.pl')'''
 
+INTERNAL_GUARD = "        if recipient_policy.internal_only(msg, rcpttos):\n            import copy\n            import mobile_choice\n            staged = copy.deepcopy(msg)\n            try:\n                optout = signature_optout.consume(staged, replace_text_part, signature)\n                if optout:\n                    recipient_policy.remove_signature(staged, signature, replace_text_part)\n                else:\n                    staged = recipient_policy.automatic_internal_message(staged, signature, replace_text_part)\n            except mobile_choice.UnsafeSignature as error:\n                # Sender/route checks above have passed. Formatting must never\n                # block internal mail; keep the complete normalized original.\n                print('INTERNAL_SIGNATURE_PRESERVED reason=' + str(error), flush=True)\n                staged = msg\n            reinject(mailfrom, rcpttos, smtp_bytes(staged))\n            return None\n"
+
+FOOTER_GUARD = "            # A Google compliance footer can follow the verified HTML signature.\n            # Remove only the unique exact signature token span; preserve the footer.\n            if target_tokens:\n                values = [m[0] for m in tokens]\n                hits = [i for i in range(len(tokens)-len(target_tokens)+1)\n                        if values[i:i+len(target_tokens)] == target_tokens]\n                if len(hits) == 1:\n                    i = hits[0]\n                    stop = tokens[i+len(target_tokens)-1].end()\n                    tail = current[stop:]\n                    if re.match(r'\\s*--[ \\t]*\\r?\\nCONFIDENTIALITY NOTICE:', tail):\n                        prefix = current[:tokens[i].start()]\n                        prefix = re.sub(r'(?:\\s|\\[image:[^\\]]*\\])*\\Z', '', prefix, flags=re.I)\n                        current = prefix.rstrip() + '\\n\\n' + tail.lstrip('\\r\\n')\n                        break\n"
+FOOTER_ANCHOR = "            if target_tokens and len(tokens) >= len(target_tokens) and [m[0] for m in tokens[-len(target_tokens):]] == target_tokens:"
+
 def patch(source, before, after):
     if after in source:
         return source
@@ -53,13 +58,19 @@ def patch(source, before, after):
 def patched_sources(base):
     submission = (base/'submission_filter.py').read_text()
     submission = patch(submission, LOAD, LOAD_NEW)
-    if NORMALIZE_V1 in submission:
-        submission = submission.replace(NORMALIZE_V1, NORMALIZE_NEW)
-    if NORMALIZE_V2 in submission:
-        submission = submission.replace(NORMALIZE_V2, NORMALIZE_NEW)
-    submission = patch(submission, NORMALIZE, NORMALIZE_NEW)
+    if INTERNAL_GUARD not in submission:
+        if NORMALIZE_V1 in submission:
+            submission = submission.replace(NORMALIZE_V1, NORMALIZE_NEW)
+        if NORMALIZE_V2 in submission:
+            submission = submission.replace(NORMALIZE_V2, NORMALIZE_NEW)
+        submission = patch(submission, NORMALIZE, NORMALIZE_NEW)
+    if INTERNAL_GUARD not in submission:
+        anchor = '        optout = signature_optout.consume(msg, replace_text_part, signature)'
+        submission = patch(submission, anchor, INTERNAL_GUARD + anchor)
     route = patch((base/'workspace_route_filter.py').read_text(), ALLOWED, ALLOWED_NEW)
     mobile = polish_quote_boundary.patch_source((base/'mobile_choice.py').read_text())
+    if FOOTER_GUARD not in mobile:
+        mobile = patch(mobile, FOOTER_ANCHOR, FOOTER_GUARD + FOOTER_ANCHOR)
     compile(mobile, 'mobile_choice.py', 'exec')
     compile(submission, 'submission_filter.py', 'exec')
     compile(route, 'workspace_route_filter.py', 'exec')

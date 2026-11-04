@@ -69,6 +69,9 @@ def patched_sources(base):
         submission = patch(submission, anchor, INTERNAL_GUARD + anchor)
     route = patch((base/'workspace_route_filter.py').read_text(), ALLOWED, ALLOWED_NEW)
     mobile = polish_quote_boundary.patch_source((base/'mobile_choice.py').read_text())
+    marker_old = "self.stack.append((tag, self.source_position(), 'gmail_signature' in classes, protected))"
+    marker_new = "self.stack.append((tag, self.source_position(),\n                               'gmail_signature' in classes or attrs.get('data-smartmail') == 'gmail_signature',\n                               protected))"
+    mobile = patch(mobile, marker_old, marker_new)
     if FOOTER_GUARD not in mobile:
         mobile = patch(mobile, FOOTER_ANCHOR, FOOTER_GUARD + FOOTER_ANCHOR)
     compile(mobile, 'mobile_choice.py', 'exec')
@@ -96,6 +99,7 @@ def main():
     shutil.copy2(here/'profile_runtime.py',args.base/'profile_runtime.py')
     shutil.copy2(here/'profile_sync.py',args.base/'profile_sync.py')
     shutil.copy2(here/'profile_delivery.py',args.base/'profile_delivery.py')
+    shutil.copy2(here/'internal_signature.py',args.base/'internal_signature.py')
     for name in ('zp-profile-sync.service','zp-profile-sync.timer'):
         shutil.copy2(here/name,Path('/etc/systemd/system')/name)
     subprocess.run(['systemctl','daemon-reload'],check=True)

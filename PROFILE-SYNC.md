@@ -30,3 +30,9 @@ Apps Script: `unifiedProfileSyncStatus()` reports last success, last publication
 ## Rollback
 
 Disable the new server timer, restore the installer backup of the two filters and Postfix maps, restore prior sender allowlists, and restart the two filter services. Do not erase Google history properties or historical URL reservations. Restore the old hourly Apps Script trigger if the new schedule is disabled. Roll back Pages code and remove the unified document together if reverting the publication architecture.
+
+## Internal mail regression (2026-11-04)
+
+Gmail mobile can mark a signature with `data-smartmail="gmail_signature"` without a class. The installer recognizes both markers and always restarts both employee and Workspace filters; restarting only the submission filter leaves the Workspace process using its previously imported recipient policy. The installer also copies internal_signature.py.
+
+Run `ZP_CODE=/opt/zp-sendas python3 gateway/check_internal_delivery.py` as a user allowed to read the gateway code. This intercepts reinjection and sends no mail. It checks both Gmail markers, internal removal, external signature retention, quoted history and attachment bytes. Actual problematic MIME bodies were also verified locally and are intentionally excluded from this repository.
